@@ -10,12 +10,14 @@ public class CartDialog extends JDialog {
     private JTable table;
     private DefaultTableModel model;
     private Cart cart;
+    private JComboBox<String> orderTypeComboBox;
+    private JComboBox<String> paymentMethodComboBox;
 
     public CartDialog(JFrame parent, Cart cart) {
         super(parent, "Keranjang", true);
         this.cart = cart;
 
-        setSize(500, 400);
+        setSize(500, 500);
         setLocationRelativeTo(parent);
         setLayout(new BorderLayout());
 
@@ -23,8 +25,24 @@ public class CartDialog extends JDialog {
         table = new JTable(model);
         add(new JScrollPane(table), BorderLayout.CENTER);
 
+        // Panel bawah untuk pilihan dan tombol
+        JPanel bottomPanel = new JPanel(new GridLayout(3, 2, 10, 10));
+
+        // ComboBox untuk Jenis Pesanan
+        bottomPanel.add(new JLabel("Jenis Pesanan:"));
+        orderTypeComboBox = new JComboBox<>(new String[]{"Dine In", "Takeaway"});
+        bottomPanel.add(orderTypeComboBox);
+
+        // ComboBox untuk Metode Pembayaran
+        bottomPanel.add(new JLabel("Metode Pembayaran:"));
+        paymentMethodComboBox = new JComboBox<>(new String[]{"Cash", "Credit Card", "E-Wallet"});
+        bottomPanel.add(paymentMethodComboBox);
+
+        // Tombol Checkout
         JButton checkoutBtn = new JButton("Checkout");
-        add(checkoutBtn, BorderLayout.SOUTH);
+        bottomPanel.add(checkoutBtn);
+
+        add(bottomPanel, BorderLayout.SOUTH);
 
         loadData();
 
@@ -50,10 +68,14 @@ public class CartDialog extends JDialog {
         try (Connection conn = KoneksiDB.getConnection()) {
             conn.setAutoCommit(false);
 
+            String orderType = orderTypeComboBox.getSelectedItem().toString();
+            String paymentMethod = paymentMethodComboBox.getSelectedItem().toString();
+
             // Simpan order ke tabel orders
-            String insertOrder = "INSERT INTO orders (total_price) VALUES (?)";
+            String insertOrder = "INSERT INTO orders (total_price, order_type) VALUES (?, ?)";
             PreparedStatement psOrder = conn.prepareStatement(insertOrder, Statement.RETURN_GENERATED_KEYS);
             psOrder.setBigDecimal(1, cart.getTotal());
+            psOrder.setString(2, orderType.toLowerCase());
             psOrder.executeUpdate();
 
             var rs = psOrder.getGeneratedKeys();
@@ -80,6 +102,15 @@ public class CartDialog extends JDialog {
             }
 
             ps.executeBatch();
+
+            // Simpan metode pembayaran ke tabel payments
+            String paymentSQL = "INSERT INTO payments (order_id, amount, payment_method) VALUES (?, ?, ?)";
+            PreparedStatement psPay = conn.prepareStatement(paymentSQL);
+            psPay.setInt(1, orderId);
+            psPay.setBigDecimal(2, cart.getTotal());
+            psPay.setString(3, paymentMethod.toLowerCase().replace(" ", "_"));
+            psPay.executeUpdate();
+
             conn.commit();
 
             JOptionPane.showMessageDialog(this, "Checkout berhasil!");
